@@ -1,0 +1,177 @@
+% !TEX TS-program = pdflatex
+% Jeremy Berman — ARC-AGI Prize Paper (Rev 1)
+% Created: 2025-10-23
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue}
+
+% Gracefully handle missing figure assets during drafts.
+\newcommand{\maybeincludegraphics}[2][]{%
+  \IfFileExists{#2}{%
+    \includegraphics[#1]{#2}%
+  }{%
+    \fbox{%
+      \parbox[c][2in][c]{0.8\linewidth}{\centering Missing figure: #2}%
+    }%
+  }%
+}
+
+\title{From Code to Language at Test Time: Evolving Solutions for ARC-AGI v1 \\ and ARC-AGI-2 (2024\,\textrightarrow\,2025)}
+\author{Jeremy Berman}
+\date{October 23, 2025}
+
+\begin{document}
+\maketitle
+
+% -------------------- ABSTRACT --------------------
+\begin{abstract}
+We present an evolutionary test-time compute system that achieved state-of-the-art results on ARC-AGI across two distinct representations. In 2024, our system evolved Python transform functions and reached \textbf{53.6\%} on ARC-AGI-Pub. In 2025, we replaced code with natural-language instructions evaluated by sub-agents, achieving \textbf{79.6\%} on ARC-AGI v1 at \textbf{\$8.42}/task and a new SoTA of \textbf{29.4\%} on ARC-AGI v2. We analyze why multi-generation search, targeted revisions, and representation choice matter; report failure modes of pooled context; and release implementation details enabling faithful reproduction.
+\end{abstract}
+
+% -------------------- INTRODUCTION --------------------
+\section{Introduction}
+The ARC-AGI benchmark probes core abstraction and reasoning skills via small grid-transform tasks with few demonstrations. Performance hinges on \emph{searching} for and \emph{verifying} candidate programs or instructions that generalize from examples. In 2024, I topped the ARC-AGI Public leaderboard with an approach that evolves \emph{code}; in 2025 I returned with a system that evolves \emph{language} (natural-language instructions), once again reaching the top of the leaderboards while sharply improving price-performance.
+
+This paper documents the key ideas, engineering, and ablations behind both systems, and explains the central design decision that unlocked further progress: \textbf{switching the solution representation from executable Python to English instructions} while keeping the same evolutionary chassis of generation \(\rightarrow\) scoring \(\rightarrow\) selection \(\rightarrow\) revision.
+
+\paragraph{Contributions}
+\begin{itemize}[nosep]
+  \item A comparative analysis of two winning systems that share an evolutionary test-time compute backbone but differ in representation (code vs. language).
+  \item A cost-efficient recipe that attains \textbf{79.6\%} ARC-AGI v1 at \$\textbf{8.42}/task and \textbf{29.4\%} on ARC-AGI v2, including practical reliability tooling (retries, logging, model routing).
+  \item Empirical study of \emph{individual} vs. \emph{pooled} revision strategies, and when pooled contexts begin to hurt due to token budget and attention dilution.
+\end{itemize}
+
+\paragraph{ARC Prize 2025 context} ARC-AGI-2 replaces ARC-AGI-1 for the 2025 competition and uses a pass@2 metric over \(120\) tasks per eval split \footnote{See \url{https://arcprize.org/competitions/2025/} and \url{https://arcprize.org/blog/announcing-arc-agi-2-and-arc-prize-2025}.}. The official leaderboard emphasizes the \emph{cost vs. accuracy} frontier \footnote{\url{https://arcprize.org/leaderboard}.}.
+
+% -------------------- BACKGROUND --------------------
+\section{Background and Related Work}
+\textbf{ARC-AGI.} The benchmark family (ARC-AGI-1, ARC-AGI-2) targets reasoning under few examples and penalizes rote memorization. Solutions span discrete program search, neuro-symbolic hybrids, LLM agents with verifiers, and evolutionary search.
+
+\textbf{Prior systems.} Notable publicized results include: Greenblatt et al. (43\% ARC-AGI-Pub, 2024), various commercial model previews (e.g., O3) reported at 75.7\% on ARC-AGI v1 but at high cost (\$\~200/task), and many neurosymbolic/program-synthesis entries. My 2024 system set a new ARC-AGI-Pub high-water mark via evolutionary test-time compute over Python transforms; the 2025 system extends that idea with language instructions.
+
+% -------------------- METHOD V1 --------------------
+\section{Method I (2024): Evolving Code}
+\textbf{Representation.} Candidate solutions are Python grid-transform functions.
+
+\textbf{Loop.} \emph{Generate} diverse programs \(\rightarrow\) \emph{score} on train examples \(\rightarrow\) \emph{select} top-$k$ \(\rightarrow\) \emph{revise} via LLM- or heuristic-guided edits. Depth (number of generations) systematically improved pass rates.
+
+\textbf{Verifier.} Execution produces exact grids; scoring is deterministic; tie-break via simpler programs and lower token/compute.
+
+% -------------------- METHOD V2 --------------------
+\section{Method II (2025): Evolving Language}
+\textbf{Representation.} Replace code with short, structured \emph{English instructions} that describe the transformation. A lightweight sub-agent converts instructions to candidate outputs and self-checks against demonstrations.
+
+\textbf{Two-stage revision.} (1) \emph{Individual revisions:} each candidate is improved in isolation; (2) \emph{Pooled revisions:} a curated subset of high-scorers is merged into a shared prompt for cross-pollination. We cap pooled parents to prevent context bloat.
+
+\textbf{Why language?} Many ARC-AGI-2 patterns are brittle to express as rigid code but natural in controlled prose (e.g., “\emph{flood-fill the largest green region then outline it in red}”). Language also reduces execution errors and broadens search neighborhoods between generations.
+
+% -------------------- ENGINEERING --------------------
+\section{Engineering for Scale and Cost}
+\textbf{Model routing.} A small model-catalog maps tasks to providers/models (instruction synthesis vs. evaluation vs. scoring), enabling price/perf trade-offs.
+
+\textbf{Reliability.} Exponential backoff and constrained concurrency ensure progress under API flakiness. Every run/task emits structured logs (\texttt{run\_id}, \texttt{task\_id}, model, prompts, scores) for auditability and reproduction.
+
+\textbf{Budgeting.} Token-level cost accounting and early-stopping heuristics (e.g., stop after two perfect training matches) deliver strong accuracy at \$\,8.42/task.
+
+% -------------------- EXPERIMENTS --------------------
+\section{Experiments}
+\subsection{Ablations (2024)}
+Depth helps: deeper evolutionary chains improve accuracy over shallow sampling. We also observe diminishing returns beyond a small number of revisions per generation.
+
+\subsection{Individual vs. Pooled Revision (2025)}
+Pooled prompts accelerate cross-seed idea transfer but can degrade when too many parents inflate context. In practice, a pool size of 2--3 per round worked well with modern context windows.
+
+\subsection{Budget Sensitivity}
+Accuracy saturates quickly with \(\sim\)40 attempts per task (30 initial, 5 individual revisions, 5 pooled), suggesting most value comes from early exploration plus targeted refinements.
+
+% -------------------- HEAD-TO-HEAD --------------------
+\section{Leaderboard and Head-to-Head}
+The official ARC Prize leaderboard visualizes the cost-accuracy frontier for ARC-AGI-2 \footnote{\url{https://arcprize.org/leaderboard}}. Table~\ref{tab:head_to_head} summarizes representative publicized results alongside our two systems. (Values for commercial previews are reported figures; ARC-AGI-2 scores are pass@2.)
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+System & Rep. & Accuracy & Cost / Task & Notes \\
+\midrule
+Greenblatt (2024) & Code & 43\% v1 & -- & Prior public SOTA \\
+O3 (preview, 2024) & -- & 75.7\% v1 & approx. \$200 & High cost \\
+Berman (2024) & Code & \textbf{53.6\% v1} & -- & Evolutionary TTC \\
+Berman (2025) & Lang & \textbf{79.6\% v1} & \textbf{\$8.42} & New SoTA: 29.4\% v2 \\
+\bottomrule
+\end{tabular}
+\caption{Head-to-head summary across ARC-AGI variants.}
+\label{tab:head_to_head}
+\end{table}
+
+% -------------------- FIGURES --------------------
+\section{Figures}
+% Export images from the blog posts or repos into ./figs
+\begin{figure}[h]
+  \centering
+  \maybeincludegraphics[width=0.92\linewidth]{figs/v1-architecture.png}
+  \caption{V1 (2024): Evolutionary search over Python transforms: generate\,$\to$\,score\,$\to$\,select\,$\to$\,revise.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \maybeincludegraphics[width=0.92\linewidth]{figs/v2-architecture.png}
+  \caption{V2 (2025): Language-instruction evolution with individual and pooled revisions. Worst-case \(\sim\)40 attempts per task.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \maybeincludegraphics[width=0.8\linewidth]{figs/depth-helps.png}
+  \caption{Depth ablation (2024): deeper generations outperform shallow sampling.}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \maybeincludegraphics[width=0.8\linewidth]{figs/pooling-tradeoff.png}
+  \caption{When pooling hurts: larger parent pools inflate context and reduce marginal gains.}
+\end{figure}
+
+% -------------------- LIMITATIONS --------------------
+\section{Limitations}
+\textbf{Verifier leakage.} Instruction followers can overfit to demos; we mitigate with stricter self-checks and holdout-style scoring.
+
+\textbf{Context brittleness.} Pooled prompts suffer from token-limit effects; we cap pool sizes and prefer iterative refinement.
+
+\textbf{Distribution shift.} Some ARC-AGI-2 patterns remain dead zones for current models; future work explores curriculum and tool-augmented verifiers.
+
+% -------------------- REPRO CHECKLIST --------------------
+\section{Reproducibility Checklist}
+\begin{itemize}[nosep]
+  \item \textbf{Code release}: Public repos for 2024 and 2025 systems (links in footnotes). \\
+  \item \textbf{Seeds}: Fixed RNG seeds for sampling and selection. \\
+  \item \textbf{Prompts}: Full prompts and instruction templates. \\
+  \item \textbf{Attempts}: 30 initial \,+\,5 individual \,+\,5 pooled (caps). \\
+  \item \textbf{Models}: Model catalog with provider and price info. \\
+  \item \textbf{Logs}: Run/task IDs, scores, chosen candidates, costs. \\
+  \item \textbf{Hardware}: Cloud inference only; no custom accelerators. \\
+  \item \textbf{Costs}: Token-based accounting; average \$8.42/task on v1.
+\end{itemize}
+
+% -------------------- PAPER AWARD COMPLIANCE --------------------
+\section{ARC Prize 2025 Paper Award Compliance}
+This paper is linked to an eligible Kaggle code submission and open-source release, per ARC Prize 2025 rules (ARC-AGI-2, 120-task evals, pass@2, open source before private eval) \footnote{\url{https://arcprize.org/competitions/2025/}\, and Kaggle overview: \url{https://www.kaggle.com/competitions/arc-prize-2025/overview}}. We include system description, empirical results, ablations, limitations, and reproducibility details as requested for Paper Award consideration.
+
+% -------------------- DISCUSSION --------------------
+\section{Discussion: From Test-Time Search to General Reasoning}
+Test-time compute bridges static pattern-matching and systematic reasoning by treating inference as controlled search guided by verifiers. Switching from code to language broadened the reachable neighborhoods during search without sacrificing verifiability. We conjecture that combining compact instruction languages, stronger verifiers, and tool access will continue to push the frontier on ARC-AGI-2 and beyond.
+
+\paragraph{Artifacts} Blog write-ups (2024, 2025), full code, prompts, and run logs are linked in the project repository and supplemental material.
+
+\vspace{6pt}
+\noindent\textit{Acknowledgments.} Thanks to the ARC Prize organizers and open-source contributors who made the evaluation pipeline and datasets accessible.
+
+\end{document}
