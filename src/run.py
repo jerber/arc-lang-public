@@ -27,7 +27,7 @@ from src.main import (
     output_grid_from_instructions,
 )
 from src.models import Challenge, Input
-from src.utils import random_str
+from src.utils import get_random_unattempted_task_ids, random_str
 
 TT = T.TypeVar("TT")
 
@@ -1022,15 +1022,26 @@ async def run() -> None:
     from src.configs.grok_configs import grok_config_prod
     from src.configs.oss_configs import oss_config
 
+    config = gpt5pro_config_prod
+    limit = 10
+
+    # get random task ids that have not been attempted
+    random_task_ids = await get_random_unattempted_task_ids(
+        all_task_ids=json.loads(challenges_path.read_text()).keys(),
+        model=config.final_follow_model,
+        limit=limit,
+    )
+
     await run_from_json(
         challenges_path=challenges_path,
         truth_solutions_path=solutions_path,
-        config=gpt5pro_config_prod,
+        config=config,
         attempts_path=attempts_path,
         temp_attempts_dir=temp_attempts_path,
-        limit=10,
-        offset=20,
+        limit=limit,
+        # offset=350,
         # task_ids={"b0039139", "20270e3b"},
+        task_ids=set(random_task_ids),
     )
 
     if solutions_path:
