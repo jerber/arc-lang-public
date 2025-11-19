@@ -987,7 +987,7 @@ async def run_from_json(
 async def run() -> None:
     # Generate and print run ID at the start
 
-    year = "2024"
+    year = "2025"
     train_or_eval = "evaluation"
     root_dir = Path(__file__).parent.parent
 
@@ -1025,11 +1025,11 @@ async def run() -> None:
     await run_from_json(
         challenges_path=challenges_path,
         truth_solutions_path=solutions_path,
-        config=gpt5pro_config_prod,
+        config=grok_config_prod,
         attempts_path=attempts_path,
         temp_attempts_dir=temp_attempts_path,
-        limit=10,
-        offset=70,
+        limit=1,
+        offset=0,
         # task_ids={"b0039139", "20270e3b"},
     )
 

@@ -58,7 +58,7 @@ Only the API keys for the models you select and `MAX_CONCURRENCY` are strictly r
 The main entry point is `src/run.py`.  It currently wires up the 2025 evaluation challenges and defaults to `grok_config_prod` with `limit=1` so you can smoke-test the pipeline quickly.
 
 ```bash
-python src/run.py
+python -m src.run
 ```
 
 What happens:
