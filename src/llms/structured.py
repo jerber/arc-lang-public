@@ -192,7 +192,11 @@ async def get_next_structure(
                 res = await _get_next_structure_deepseek(
                     structure=structure, model=model, messages=messages
                 )
-            elif model in [Model.gemini_2_5, Model.gemini_2_5_flash_lite]:
+            elif model in [
+                Model.gemini_2_5,
+                Model.gemini_2_5_flash_lite,
+                Model.gemini_3_pro,
+            ]:
                 res = await _get_next_structure_gemini(
                     structure=structure, model=model, messages=messages
                 )
@@ -461,6 +465,22 @@ MODEL_PRICING_D: dict[Model, ModelPricing] = {
         reasoning_tokens=15_000 / 1_000_000,  # $50 per 1M tokens (estimate)
         completion_tokens=15_000 / 1_000_000,  # $30 per 1M tokens (estimate)
     ),
+    # Gemini pricing (per million tokens)
+    Model.gemini_2_5: ModelPricing(
+        prompt_tokens=1_250 / 1_000_000,  # $1.25 per 1M tokens
+        reasoning_tokens=10_000 / 1_000_000,  # $10 per 1M tokens (thinking)
+        completion_tokens=10_000 / 1_000_000,  # $10 per 1M tokens
+    ),
+    Model.gemini_2_5_flash_lite: ModelPricing(
+        prompt_tokens=75 / 1_000_000,  # $0.075 per 1M tokens
+        reasoning_tokens=300 / 1_000_000,  # $0.30 per 1M tokens
+        completion_tokens=300 / 1_000_000,  # $0.30 per 1M tokens
+    ),
+    Model.gemini_3_pro: ModelPricing(
+        prompt_tokens=2_500 / 1_000_000,  # $2.50 per 1M tokens (estimate)
+        reasoning_tokens=15_000 / 1_000_000,  # $15 per 1M tokens (thinking, estimate)
+        completion_tokens=15_000 / 1_000_000,  # $15 per 1M tokens (estimate)
+    ),
 }
 
 
@@ -495,6 +515,25 @@ class OpenAIUsage(BaseModel):
         return round(
             self.prompt_tokens * pricing.prompt_tokens
             + self.reasoning_tokens * pricing.reasoning_tokens
+            + self.completion_tokens * pricing.completion_tokens,
+            2,
+        )
+
+
+class GeminiUsage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    thinking_tokens: int = 0
+    cached_tokens: int = 0
+
+    def cents(self, model: Model) -> float:
+        if model not in MODEL_PRICING_D:
+            return 0.0
+        pricing = MODEL_PRICING_D[model]
+        return round(
+            self.prompt_tokens * pricing.prompt_tokens
+            + self.thinking_tokens * pricing.reasoning_tokens
             + self.completion_tokens * pricing.completion_tokens,
             2,
         )
@@ -797,6 +836,20 @@ async def _get_next_structure_openrouter(
         raise Exception(f"Failed to parse JSON response: {e}\nResponse: {content}")
 
 
+# Gemini model output token limits
+GEMINI_MODEL_MAX_OUTPUT_TOKENS: dict[Model, int] = {
+    Model.gemini_2_5: 65_536,
+    Model.gemini_2_5_flash_lite: 8_192,
+    Model.gemini_3_pro: 65_536,  # Max output tokens
+}
+
+# Gemini thinking budget (for reasoning models)
+GEMINI_MODEL_THINKING_BUDGET: dict[Model, int] = {
+    Model.gemini_3_pro: 65_535,  # Max allowed: 65535
+}
+
+
+@retry_with_backoff(max_retries=20)
 async def _get_next_structure_gemini(
     structure: type[BMType],  # type[T]
     model: Model,
@@ -805,16 +858,42 @@ async def _get_next_structure_gemini(
     # Convert messages to Gemini format
     prompt = update_messages_gemini(messages=messages)
 
-    # Generate content with structured output
-    response = await asyncio.to_thread(
-        gemini_client.models.generate_content,
+    # Build config for structured output with maxed out settings
+    config: dict[str, T.Any] = {
+        "response_mime_type": "application/json",
+        "response_schema": structure,
+        "max_output_tokens": GEMINI_MODEL_MAX_OUTPUT_TOKENS.get(model, 65_536),
+    }
+
+    # Enable thinking for reasoning models (Gemini 3 Pro)
+    if model in GEMINI_MODEL_THINKING_BUDGET:
+        config["thinking_config"] = {
+            "thinking_budget": GEMINI_MODEL_THINKING_BUDGET[model],
+        }
+
+    # Use native async API instead of asyncio.to_thread
+    response = await gemini_client.aio.models.generate_content(
         model=model.value,
         contents=prompt,
-        config={
-            "response_mime_type": "application/json",
-            "response_schema": structure,
-        },
+        config=config,
     )
+
+    # Extract and log usage metadata
+    usage_metadata = response.usage_metadata
+    if usage_metadata:
+        gemini_usage = GeminiUsage(
+            prompt_tokens=usage_metadata.prompt_token_count or 0,
+            completion_tokens=usage_metadata.candidates_token_count or 0,
+            total_tokens=usage_metadata.total_token_count or 0,
+            thinking_tokens=usage_metadata.thoughts_token_count or 0,
+            cached_tokens=usage_metadata.cached_content_token_count or 0,
+        )
+        log.debug(
+            "gemini_usage",
+            model=model.value,
+            usage=gemini_usage.model_dump(),
+            cents=gemini_usage.cents(model=model),
+        )
 
     # The response.parsed should contain the instantiated object
     if hasattr(response, "parsed") and response.parsed:

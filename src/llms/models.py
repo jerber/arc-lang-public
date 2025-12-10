@@ -22,6 +22,7 @@ class Model(str, Enum):
     sonnet_4_5 = "claude-sonnet-4-5-20250929"
     gemini_2_5 = "gemini-2.5-pro"
     gemini_2_5_flash_lite = "gemini-2.0-flash-lite"
+    gemini_3_pro = "gemini-3-pro-preview"
 
     deepseek_chat = "deepseek-chat"
     deepseek_reasoner = "deepseek-reasoner"
@@ -70,4 +71,5 @@ model_config: dict[Model, ModelConfig] = {
     Model.sonnet_4_5: ModelConfig(max_tokens=60_000, max_thinking_tokens=60_000),
     Model.gpt_5: ModelConfig(max_tokens=1_000_000, max_thinking_tokens=None),
     Model.gpt_5_pro: ModelConfig(max_tokens=4_000_000, max_thinking_tokens=None),
+    Model.gemini_3_pro: ModelConfig(max_tokens=1_000_000, max_thinking_tokens=65_535),
 }

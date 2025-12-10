@@ -209,9 +209,21 @@ async def get_next_message_gemini(
             ),
         )
 
+    # Build config with maxed out settings for Gemini 3 Pro
+    config: dict[str, T.Any] = {
+        "max_output_tokens": 65_536,  # Max output tokens
+    }
+
+    # Enable thinking for Gemini 3 Pro (reasoning model)
+    if model == Model.gemini_3_pro:
+        config["thinking_config"] = {
+            "thinking_budget": 65_535,  # Max allowed: 65535
+        }
+
     response = await client.aio.models.generate_content(
         model=model.value,
         contents=contents,
+        config=config,
     )
 
     return response.text
