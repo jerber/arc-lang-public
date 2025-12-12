@@ -40,6 +40,7 @@ OPENAI_MODEL_MAX_OUTPUT_TOKENS: dict[Model, int] = {
     Model.gpt_4_1: 128_000,
     Model.gpt_4_1_mini: 128_000,
     Model.gpt_5: 128_000,
+    Model.gpt_52: 128_000,
     Model.gpt_5_pro: 200_000,
 }
 
@@ -63,7 +64,7 @@ async def create_and_poll_response(
     extra_headers: dict[str, T.Any] = dict(create_kwargs.pop("extra_headers", {}) or {})
     headers = {**RESPONSES_EXTRA_HEADERS, **extra_headers}
 
-    is_gpt5 = model in {Model.gpt_5, Model.gpt_5_pro}
+    is_gpt5 = model in {Model.gpt_5, Model.gpt_52, Model.gpt_5_pro}
 
     # Configure GPT-5 defaults: background mode with polling
     if is_gpt5:
@@ -197,13 +198,13 @@ def extract_structured_output(response: Response | dict[str, T.Any]) -> dict[str
 
     # Primary: Direct JSON field in content (json_schema format)
     for item in payload.get("output", []):
-        for content in item.get("content", []):
+        for content in item.get("content") or []:
             if json_data := content.get("json"):
                 return json_data
 
     # Fallback: Parse text as JSON
     for item in payload.get("output", []):
-        for content in item.get("content", []):
+        for content in item.get("content") or []:
             if text := content.get("text"):
                 try:
                     return json.loads(text)

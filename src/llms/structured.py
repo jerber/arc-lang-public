@@ -182,6 +182,7 @@ async def get_next_structure(
                 Model.gpt_4_1_mini,
                 Model.o3_pro,
                 Model.gpt_5,
+                Model.gpt_52,
                 Model.gpt_5_pro,
             ]:
                 res = await _get_next_structure_openai(
@@ -268,7 +269,7 @@ async def _get_next_structure_openai(
     messages: list,
 ) -> BMType:
     reasoning: dict[str, str] | None = None
-    if model in [Model.o3, Model.o4_mini, Model.o3_pro, Model.gpt_5, Model.gpt_5_pro]:
+    if model in [Model.o3, Model.o4_mini, Model.o3_pro, Model.gpt_5, Model.gpt_52, Model.gpt_5_pro]:
         reasoning = {"effort": "high"}
 
     max_output_tokens = OPENAI_MODEL_MAX_OUTPUT_TOKENS.get(model, 128_000)
@@ -466,6 +467,11 @@ MODEL_PRICING_D: dict[Model, ModelPricing] = {
         prompt_tokens=125 / 1_000_000,  # $10 per 1M tokens (estimate)
         reasoning_tokens=1_000 / 1_000_000,  # $50 per 1M tokens (estimate)
         completion_tokens=1_000 / 1_000_000,  # $30 per 1M tokens (estimate)
+    ),
+    Model.gpt_52: ModelPricing(
+        prompt_tokens=175 / 1_000_000,  # $1.75 per 1M tokens
+        reasoning_tokens=1_400 / 1_000_000,  # $14 per 1M tokens (same as output)
+        completion_tokens=1_400 / 1_000_000,  # $14 per 1M tokens
     ),
     Model.gpt_5_pro: ModelPricing(
         prompt_tokens=200 / 1_000_000,  # $20 per 1M tokens (estimate)

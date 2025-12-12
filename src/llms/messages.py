@@ -59,7 +59,7 @@ async def extract_grid_from_text(
     model: Model,
     text: str,
 ) -> list[list[int]]:
-    timeout = 10_800 if model is Model.gpt_5_pro else 120
+    timeout = 10_800 if model in {Model.gpt_52, Model.gpt_5_pro} else 120
     client = AsyncOpenAI(
         api_key=os.environ["OPENAI_API_KEY"], timeout=timeout, max_retries=10
     )

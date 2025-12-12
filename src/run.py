@@ -1024,6 +1024,7 @@ async def run() -> None:
         gemini3pro_openrouter_prod,
     )
     from src.configs.gpt5pro_configs import gpt5pro_config_prod
+    from src.configs.gpt52_configs import gpt52_config_prod
     from src.configs.gpt_configs import gpt_config_prod
     from src.configs.grok_configs import grok_config_prod
     from src.configs.oss_configs import oss_config
@@ -1031,7 +1032,7 @@ async def run() -> None:
     await run_from_json(
         challenges_path=challenges_path,
         truth_solutions_path=solutions_path,
-        config=gemini3pro_openrouter_prod,
+        config=gpt52_config_prod,
         attempts_path=attempts_path,
         temp_attempts_dir=temp_attempts_path,
         limit=10,

@@ -16,6 +16,7 @@ class Model(str, Enum):
     gpt_4_1_mini = "gpt-4.1-mini"
     gpt_5 = "gpt-5"
     gpt_5_pro = "gpt-5-pro"
+    gpt_52 = "gpt-5.2"
 
     sonnet_3_7 = "claude-3-7-sonnet-latest"
     sonnet_3_5 = "claude-3-5-sonnet-latest"
@@ -72,8 +73,13 @@ model_config: dict[Model, ModelConfig] = {
     Model.sonnet_3_7: ModelConfig(max_tokens=50_000, max_thinking_tokens=30_000),
     Model.sonnet_4_5: ModelConfig(max_tokens=60_000, max_thinking_tokens=60_000),
     Model.gpt_5: ModelConfig(max_tokens=1_000_000, max_thinking_tokens=None),
+    Model.gpt_52: ModelConfig(max_tokens=1_000_000, max_thinking_tokens=None),
     Model.gpt_5_pro: ModelConfig(max_tokens=4_000_000, max_thinking_tokens=None),
     Model.gemini_3_pro: ModelConfig(max_tokens=1_000_000, max_thinking_tokens=65_535),
-    Model.gemini_3_pro_gateway: ModelConfig(max_tokens=1_000_000, max_thinking_tokens=32_768),  # Vertex AI limit
-    Model.gemini_3_pro_openrouter: ModelConfig(max_tokens=1_048_576, max_thinking_tokens=None),  # OpenRouter manages this
+    Model.gemini_3_pro_gateway: ModelConfig(
+        max_tokens=1_000_000, max_thinking_tokens=32_768
+    ),  # Vertex AI limit
+    Model.gemini_3_pro_openrouter: ModelConfig(
+        max_tokens=1_048_576, max_thinking_tokens=None
+    ),  # OpenRouter manages this
 }
